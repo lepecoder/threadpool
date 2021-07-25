@@ -19,6 +19,7 @@ void TaskQueue::addTask(Task task) {
     mtx.unlock();
 }
 
+/* 添加任务 */
 void TaskQueue::addTask(callback f, void *arg) {
     mtx.lock();
     m_taskQ.emplace(f, arg);
@@ -60,6 +61,14 @@ void ThreadPool::threadExit() {
     // 需要把调用这个函数的线程结束掉
     // 这个就有点麻烦了，thread在初始化的时候就和运行的函数绑定，运行完之后就自动销毁，
     // 所以没有退出一个线程这个说法
+}
+/* 管理者线程的任务函数 */
+void *ThreadPool::manager(void *arg) {
+    ThreadPool *pool = static_cast<ThreadPool *>(arg);
+    while (!pool->shutdown) {
+        // 建个3s检查一次
+        this_thread::sleep_for(3s);
+    }
 }
 
 /************* * 工作线程的任务函数 * *************/

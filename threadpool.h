@@ -1,8 +1,12 @@
 #pragma once
 #include <condition_variable>
+#include <functional>
+#include <future>
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <utility>
+#include <vector>
 
 using callback = void (*)(void *arg); // 定义任务函数别名
 
@@ -21,14 +25,15 @@ class Task {
 };
 
 /* 任务队列声明 */
-class TaskQueue {
+template <typename T> class TaskQueue {
   public:
     TaskQueue();
     ~TaskQueue();
-    void addTask(Task task); // 添加任务
-    void addTask(callback f, void *arg);
+    void addTask(Task task);                        // 添加任务
+    void addTask(callback f, void *arg);            // 添加任务
     Task takeTask();                                // 取任务
     inline int taskNum() { return m_taskQ.size(); } // 获取当前任务个数
+    inline bool empty() { return m_taskQ.empty(); } // 队列是否为空
 
   private:
     std::queue<Task> m_taskQ; // 任务队列
