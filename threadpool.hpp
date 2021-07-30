@@ -70,24 +70,29 @@ class ThreadPool {
         ThreadWorker(ThreadPool *pool, const int id) : m_pool(pool), m_id(id) {}
         void operator()(); // 重载()操作
     };
-    bool m_shutdown;                     // 线程池关闭标记
-    TaskQueue<function<void()>> m_queue; // 线程池的任务队列
-    vector<thread> work_threads;         // 工作线程队列
-    mutex mtxPool;                       // 线程池互斥锁
-    condition_variable condi_lock;       // 条件变量，可以让线程休眠或唤醒线程
+    bool m_shutdown;                      // 线程池关闭标记
+    TaskQueue<function<void()>> m_queue;  // 线程池的任务队列
+    vector<thread> work_threads;          // 工作线程队列
+    mutex mtxPool;                        // 线程池互斥锁
+    mutex mtxTask;                        // 等待任务队列为空
+    condition_variable condi_var_mtxPool; // 条件变量，可以让线程休眠或唤醒线程
+    condition_variable condi_var_mtxTask; //
   public:
     // 构造函数，传入线程数量
-    ThreadPool(const int n_threads = 12) : work_threads(vector<thread>(n_threads)), m_shutdown(false) {}
+    ThreadPool(const int n_threads);
     // ~ThreadPool();   // 析构函数
-    void init();     // 初始化线程池
-    void shutdown(); // 关闭线程池
+    // void init();     // 初始化线程池
+    void wait();     // 等待任务队列中的任务都分配线程
+    void shutdown(); // 关闭线程池,等待所有线程执行结束
     template <typename F, typename... Args>
 
     auto submit(F &&f, Args &&...args) -> future<decltype(f(args...))>; // 添加任务
 };
-void ThreadPool::init() {
-    // 为工作线程分配工人
-    for (int i = 0; i < work_threads.size(); i++) {
+
+ThreadPool::ThreadPool(const int n_threads = 12) {
+    work_threads = vector<thread>(n_threads);
+    m_shutdown = false;
+    for (int i = 0; i < n_threads; i++) {
         work_threads.at(i) = thread(ThreadWorker(this, i));
     }
 }
@@ -100,7 +105,8 @@ void ThreadPool::ThreadWorker::operator()() {
         unique_lock<mutex> lock(m_pool->mtxPool);
         // 如果任务队列空，阻塞当前线程，直到条件变量唤醒
         if (m_pool->m_queue.empty()) {
-            m_pool->condi_lock.wait(lock);
+            m_pool->condi_var_mtxTask.notify_one();
+            m_pool->condi_var_mtxPool.wait(lock);
         }
         // 取出任务队列中的任务
         auto task_func = m_pool->m_queue.takeTask();
@@ -111,10 +117,20 @@ void ThreadPool::ThreadWorker::operator()() {
     }
 }
 
+void ThreadPool::wait() {
+    // 等待任务队列中的任务执行完毕
+    unique_lock<mutex> lock(mtxTask);
+    if (!m_queue.empty()) {
+        condi_var_mtxTask.wait(lock);
+    }
+
+    return;
+}
+
 void ThreadPool::shutdown() {
     // 关闭线程池
     m_shutdown = true;
-    condi_lock.notify_all(); // 信号量通知，唤醒所有工作线程
+    condi_var_mtxPool.notify_all(); // 信号量通知，唤醒所有工作线程
     for (auto &thread : work_threads) {
         if (thread.joinable()) { // 还没有join，而且是活跃的线程
             thread.join();       // 等待执行结束
@@ -134,7 +150,7 @@ template <typename F, typename... Args> auto ThreadPool::submit(F &&f, Args &&..
     // 加到任务队列里
     m_queue.addTask(warpper_func);
     // 唤醒一个等待中的线程
-    condi_lock.notify_one();
+    condi_var_mtxPool.notify_one();
     // 返回任务的future对象
     return task_ptr->get_future();
 }
