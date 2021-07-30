@@ -1,4 +1,4 @@
-#include "threadpool.h"
+#include "threadpool.hpp"
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -6,28 +6,28 @@
 using namespace std;
 
 /********** * 任务队列定义 * **********/
-TaskQueue::TaskQueue() { /* 构造函数 */
+TaskQueue<function<void()>>::TaskQueue() { /* 构造函数 */
 }
 
-TaskQueue::~TaskQueue() { /* 析构函数 */
+TaskQueue<function<void()>>::~TaskQueue() { /* 析构函数 */
 }
 
 /* 添加任务 */
-void TaskQueue::addTask(Task task) {
+void TaskQueue<function<void()>>::addTask(T &t) {
     mtx.lock();
-    m_taskQ.emplace(task);
+    m_taskQ.emplace(t);
     mtx.unlock();
 }
 
 /* 添加任务 */
-void TaskQueue::addTask(callback f, void *arg) {
+void TaskQueue<function<void()>>::addTask(callback f, void *arg) {
     mtx.lock();
     m_taskQ.emplace(f, arg);
     mtx.unlock();
 }
 
 /* 获取任务 */
-Task TaskQueue::takeTask() {
+Task TaskQueue<function<void()>>::takeTask() {
     Task task;
     mtx.lock();
     if (!m_taskQ.empty()) {
