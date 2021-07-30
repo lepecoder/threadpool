@@ -1,20 +1,27 @@
 // test.cpp
 #include "threadpool.hpp"
+// #include "thread_pool.h"
 #include <iostream>
 #include <random>
 
-std::random_device rd;
+std::random_device rd;                                // 真实随机数产生器
 std::mt19937 mt(rd());                                //生成计算随机数mt
 std::uniform_int_distribution<int> dist(-1000, 1000); //生成-1000到1000之间的离散均匀分布数
 auto rnd = std::bind(dist, mt);
+
 // 设置线程睡眠时间
-void simulate_hard_computation() { std::this_thread::sleep_for(std::chrono::milliseconds(2000 + rnd())); }
+void simulate_hard_computation() {
+    // 睡眠两秒
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000 + rnd()));
+}
+
 // 添加两个数字的简单函数并打印结果
 void multiply(const int a, const int b) {
     simulate_hard_computation();
     const int res = a * b;
     std::cout << a << " * " << b << " = " << res << std::endl;
 }
+
 // 添加并输出结果
 void multiply_output(int &out, const int a, const int b) {
     simulate_hard_computation();
@@ -30,7 +37,7 @@ int multiply_return(const int a, const int b) {
 }
 void example() {
     // 创建3个线程的线程池
-    ThreadPool pool(3);
+    ThreadPool pool(10);
     // 初始化线程池
     pool.init();
     // 提交乘法操作，总共30个

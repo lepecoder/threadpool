@@ -1,5 +1,5 @@
 #pragma once
-#include <condition_variable>
+// #include <condition_variable>
 #include <functional>
 #include <future>
 #include <mutex>
@@ -13,17 +13,50 @@ template <typename T>
 
 class TaskQueue {
   private:
-    queue<T> m_taskQ; // 任务队列
-    mutex mtx;        // 任务队列的互斥锁
+    queue<T> m_taskQ;  // 任务队列
+    mutex m_taskQ_mtx; // 任务队列的互斥锁
   public:
     TaskQueue();
     ~TaskQueue();
-    void addTask(T &t); // 添加任务
-    // void addTask(callback f, void *arg);            // 添加任务
-    T takeTask();                                   // 取任务
-    inline int taskNum() { return m_taskQ.size(); } // 获取当前任务个数
-    inline bool empty() { return m_taskQ.empty(); } // 队列是否为空
+    void addTask(T &t);  // 添加任务
+    T takeTask();        // 取任务
+    inline int size();   // 获取当前任务个数
+    inline bool empty(); // 队列是否为空
 };
+template <typename T> int TaskQueue<T>::size() {
+    // 任务队列中的任务数
+    unique_lock<mutex> lock(m_taskQ_mtx);
+    return m_taskQ.size();
+}
+
+template <typename T> bool TaskQueue<T>::empty() {
+    // 任务队列是否为空
+    unique_lock<mutex> lock(m_taskQ_mtx);
+    return m_taskQ.empty();
+}
+
+template <typename T> TaskQueue<T>::TaskQueue() {
+    // 构造函数
+}
+template <typename T> TaskQueue<T>::~TaskQueue() {
+    // 析构函数
+}
+
+template <typename T> void TaskQueue<T>::addTask(T &t) {
+    // 添加任务
+    unique_lock<mutex> lock(m_taskQ_mtx);
+    m_taskQ.emplace(t);
+}
+
+template <typename T> T TaskQueue<T>::takeTask() {
+    // 取出任务
+    unique_lock<mutex> lock(m_taskQ_mtx); // 加锁
+    if (m_taskQ.empty())
+        return nullptr;
+    T res = move(m_taskQ.front()); // 移动语义
+    m_taskQ.pop();
+    return res;
+}
 
 /* 线程池类声明 */
 
@@ -64,8 +97,6 @@ void ThreadPool::ThreadWorker::operator()() {
     // function<void()> func;  // 基础函数类func
     // bool dequeued;  // 是否正在取出队列中的元素
     while (!m_pool->m_shutdown) {
-        // {
-        // 互斥的访问工作线程队列 work_threads
         unique_lock<mutex> lock(m_pool->mtxPool);
         // 如果任务队列空，阻塞当前线程，直到条件变量唤醒
         if (m_pool->m_queue.empty()) {
@@ -73,10 +104,10 @@ void ThreadPool::ThreadWorker::operator()() {
         }
         // 取出任务队列中的任务
         auto task_func = m_pool->m_queue.takeTask();
+        lock.unlock();
         if (task_func != nullptr) {
             task_func();
         }
-        // }
     }
 }
 
@@ -106,27 +137,4 @@ template <typename F, typename... Args> auto ThreadPool::submit(F &&f, Args &&..
     condi_lock.notify_one();
     // 返回任务的future对象
     return task_ptr->get_future();
-}
-
-template <typename T> TaskQueue<T>::TaskQueue() {
-    // 构造函数
-}
-template <typename T> TaskQueue<T>::~TaskQueue() {
-    // 析构函数
-}
-
-template <typename T> void TaskQueue<T>::addTask(T &t) {
-    // 添加任务
-    unique_lock<mutex> lock(mtx);
-    m_taskQ.emplace(t);
-}
-
-template <typename T> T TaskQueue<T>::takeTask() {
-    // 取出任务
-    unique_lock<mutex> lock(mtx); // 加锁
-    if (m_taskQ.empty())
-        return nullptr;
-    T res = move(m_taskQ.front()); // 移动语义
-    m_taskQ.pop();
-    return res;
 }
