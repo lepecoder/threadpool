@@ -1,5 +1,5 @@
 // test.cpp
-#include "threadpool.hpp"
+#include "cachedthreadpool.hpp"
 // #include "thread_pool.h"
 #include <iostream>
 #include <random>
@@ -37,15 +37,16 @@ int multiply_return(const int a, const int b) {
 }
 void example() {
     // 创建3个线程的线程池
-    ThreadPool pool(10);
+    ThreadPool pool(2, 12);
     // 初始化线程池
-    pool.init();
+    // pool.init();
     // 提交乘法操作，总共30个
     for (int i = 1; i <= 3; ++i)
         for (int j = 1; j <= 10; ++j) {
             pool.submit(multiply, i, j);
         }
     // 使用ref传递的输出参数提交函数
+
     int output_ref;
     auto future1 = pool.submit(multiply_output, std::ref(output_ref), 5, 6);
     // 等待乘法输出完成
@@ -56,7 +57,9 @@ void example() {
     // 等待乘法输出完成
     int res = future2.get();
     std::cout << "Last operation result is equals to " << res << std::endl;
-    // 关闭线程池
+    // 关闭线程池, 关闭线程池时会等待所有线程执行结束，但是如果有队列中的任务
+    // 没有分配线程，则任务不会被执行
+    pool.wait();
     pool.shutdown();
 }
 int main() {
